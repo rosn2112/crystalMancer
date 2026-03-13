@@ -62,6 +62,9 @@ def setup_storage() -> Path:
 
     gdrive = find_or_create_gdrive_dir()
     if gdrive:
+        # Ensure the local output directory exists before symlinking inside it
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
         # Symlink heavy data dirs to Google Drive
         for subdir in ["materials_project", "gnome", "cifs", "literature"]:
             gdrive_sub = gdrive / subdir
