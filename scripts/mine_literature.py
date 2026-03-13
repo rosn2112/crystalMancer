@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import requests
+import random
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -96,6 +97,30 @@ class PaperRecord:
         return {k: v for k, v in self.__dict__.items() if v}
 
 
+# ── Robust HTTP GET with Exponential Backoff ─────────────────────
+def robust_get(url: str, params: dict, headers: dict | None = None, max_retries: int = 5) -> requests.Response | None:
+    """Perform a GET request with exponential backoff for rate limits."""
+    for attempt in range(max_retries):
+        try:
+            resp = requests.get(url, params=params, headers=headers, timeout=20)
+            if resp.status_code in [429, 502, 503, 504]:
+                wait_time = (2 ** attempt) * 10 + random.randint(1, 10)
+                logger.warning("HTTP %d for %s... waiting %ds (Attempt %d/%d)", 
+                               resp.status_code, url[:30], wait_time, attempt+1, max_retries)
+                time.sleep(wait_time)
+                continue
+            resp.raise_for_status()
+            return resp
+        except requests.exceptions.RequestException as e:
+            wait_time = (2 ** attempt) * 5 + random.randint(1, 5)
+            logger.warning("Request exception for %s...: %s, waiting %ds (Attempt %d/%d)", 
+                           url[:30], e, wait_time, attempt+1, max_retries)
+            time.sleep(wait_time)
+    
+    logger.error("Max retries reached for %s", url[:50])
+    return None
+
+
 # ── Semantic Scholar search ──────────────────────────────────────
 def search_semantic_scholar(query: str, limit: int = 100) -> list[PaperRecord]:
     """Search Semantic Scholar for catalysis papers."""
@@ -105,21 +130,18 @@ def search_semantic_scholar(query: str, limit: int = 100) -> list[PaperRecord]:
     while offset < limit:
         batch = min(100, limit - offset)
         try:
-            resp = requests.get(
+            resp = robust_get(
                 f"{SEMANTIC_SCHOLAR_API}/paper/search",
                 params={
                     "query": query,
                     "limit": batch,
                     "offset": offset,
                     "fields": "title,abstract,year,authors,externalIds,journal",
-                },
-                timeout=15,
+                }
             )
-            if resp.status_code == 429:
-                logger.warning("S2 rate limited, waiting 60s …")
-                time.sleep(60)
-                continue
-            resp.raise_for_status()
+            if not resp:
+                break
+                
             data = resp.json()
 
             for item in data.get("data", []):
@@ -141,7 +163,7 @@ def search_semantic_scholar(query: str, limit: int = 100) -> list[PaperRecord]:
             if offset >= total:
                 break
 
-            time.sleep(1)  # Rate limit: 1 req/s for unauthenticated
+            time.sleep(2)  # Base rate limit
 
         except Exception as exc:
             logger.warning("S2 search failed for '%s': %s", query[:40], exc)
@@ -155,7 +177,7 @@ def search_crossref(query: str, limit: int = 50) -> list[PaperRecord]:
     """Search CrossRef for catalysis papers with DOIs."""
     papers = []
     try:
-        resp = requests.get(
+        resp = robust_get(
             CROSSREF_API,
             params={
                 "query": query,
@@ -163,10 +185,11 @@ def search_crossref(query: str, limit: int = 50) -> list[PaperRecord]:
                 "select": "DOI,title,abstract,published-print,author,container-title",
                 "filter": "has-abstract:true",
             },
-            headers={"User-Agent": "CrystalMancer/1.0 (mailto:research@example.com)"},
-            timeout=15,
+            headers={"User-Agent": "CrystalMancer/1.0 (mailto:research@example.com)"}
         )
-        resp.raise_for_status()
+        if not resp:
+            return papers
+            
         data = resp.json()
 
         for item in data.get("message", {}).get("items", []):
@@ -207,17 +230,18 @@ def search_europe_pmc(query: str, limit: int = 50) -> list[PaperRecord]:
     """Search Europe PMC for open access catalysis papers."""
     papers = []
     try:
-        resp = requests.get(
+        resp = robust_get(
             EUROPE_PMC_API,
             params={
                 "query": query,
                 "resultType": "core",
                 "pageSize": min(limit, 100),
                 "format": "json",
-            },
-            timeout=15,
+            }
         )
-        resp.raise_for_status()
+        if not resp:
+            return papers
+            
         data = resp.json()
 
         for item in data.get("resultList", {}).get("result", []):
@@ -364,7 +388,7 @@ def main():
                      len(s2_papers), len(cr_papers), len(pmc_papers), new_count)
 
         # Rate limiting between queries
-        time.sleep(2)
+        time.sleep(3)
 
     # Save all papers
     with open(output_file, "w", encoding="utf-8") as f:
