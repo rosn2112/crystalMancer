@@ -1,0 +1,29 @@
+pymatgen>=2024.1.1
+requests>=2.31.0
+tqdm>=4.66.0
+pandas>=2.1.0
+numpy>=1.24.0
+
+# Knowledge Graph
+neo4j>=5.15.0
+
+# Embeddings & RAG
+sentence-transformers>=2.2.0
+faiss-cpu>=1.7.4
+
+# PDF extraction
+pdfplumber>=0.10.0
+
+# Dev
+pytest>=7.4.0
+pytest-mock>=3.12.0
+
+# Optional — GPU training (install separately for Colab)
+# torch>=2.0.0
+# torch_geometric>=2.4.0
+# torch_scatter
+# torch_sparse
+
+# Optional — DFT
+# gpaw
+# ase>=3.22.0

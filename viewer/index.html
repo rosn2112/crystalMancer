@@ -1,0 +1,1160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crystal Mancer — 3D Viewer</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #111827;
+            --bg-panel: rgba(17, 24, 39, 0.92);
+            --bg-card: rgba(30, 41, 59, 0.7);
+            --accent: #6366f1;
+            --accent-glow: rgba(99, 102, 241, 0.3);
+            --accent-light: #818cf8;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border: rgba(148, 163, 184, 0.12);
+            --success: #34d399;
+            --warning: #fbbf24;
+            --danger: #f87171;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* ── Header ──────────────────────────────── */
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 56px;
+            background: var(--bg-panel);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            z-index: 100;
+        }
+
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-title .icon {
+            font-size: 22px;
+        }
+
+        .header-title h1 {
+            font-size: 16px;
+            font-weight: 600;
+            background: linear-gradient(135deg, var(--accent-light), #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.02em;
+        }
+
+        .header-title span {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        /* ── Buttons ─────────────────────────────── */
+        .btn {
+            padding: 7px 14px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn:hover {
+            background: rgba(99, 102, 241, 0.15);
+            border-color: var(--accent);
+            box-shadow: 0 0 12px var(--accent-glow);
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-light);
+        }
+
+        /* ── Viewport ────────────────────────────── */
+        #viewport {
+            position: fixed;
+            top: 56px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+        }
+
+        canvas { display: block; }
+
+        /* ── Side Panel ──────────────────────────── */
+        .side-panel {
+            position: fixed;
+            top: 56px;
+            right: 0;
+            width: 300px;
+            bottom: 0;
+            background: var(--bg-panel);
+            backdrop-filter: blur(20px);
+            border-left: 1px solid var(--border);
+            overflow-y: auto;
+            z-index: 50;
+            transform: translateX(0);
+            transition: transform 0.3s ease;
+        }
+
+        .side-panel.collapsed { transform: translateX(300px); }
+
+        .panel-section {
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .panel-section h3 {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        /* ── Info Cards ──────────────────────────── */
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            font-size: 13px;
+        }
+
+        .info-row .label { color: var(--text-secondary); }
+        .info-row .value { color: var(--text-primary); font-weight: 500; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+
+        /* ── Element Legend ───────────────────────── */
+        .element-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .element-chip {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            background: var(--bg-card);
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .element-chip .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        /* ── Controls ────────────────────────────── */
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .control-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .control-row label {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .toggle {
+            width: 36px;
+            height: 20px;
+            background: var(--bg-card);
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            cursor: pointer;
+            position: relative;
+            transition: all 0.3s;
+        }
+
+        .toggle.active {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .toggle::after {
+            content: '';
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: white;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.3s;
+        }
+
+        .toggle.active::after { transform: translateX(16px); }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 4px;
+            background: var(--bg-card);
+            border-radius: 2px;
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--accent);
+            cursor: pointer;
+        }
+
+        /* ── Drop Zone ───────────────────────────── */
+        .drop-zone {
+            position: fixed;
+            top: 56px;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .drop-zone.active {
+            opacity: 1;
+            pointer-events: all;
+            background: rgba(10, 14, 26, 0.85);
+        }
+
+        .drop-zone-inner {
+            border: 2px dashed var(--accent);
+            border-radius: 20px;
+            padding: 60px 80px;
+            text-align: center;
+            background: rgba(99, 102, 241, 0.05);
+        }
+
+        .drop-zone-inner .icon { font-size: 48px; margin-bottom: 12px; }
+        .drop-zone-inner p { color: var(--text-secondary); font-size: 14px; }
+
+        /* ── Welcome Screen ──────────────────────── */
+        .welcome {
+            position: fixed;
+            top: 56px;
+            left: 0;
+            right: 300px;
+            bottom: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            z-index: 10;
+        }
+
+        .welcome-inner h2 {
+            font-size: 28px;
+            font-weight: 300;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, var(--text-primary), var(--text-secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .welcome-inner p { color: var(--text-muted); margin-bottom: 24px; }
+
+        .welcome-inner .shortcuts {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .welcome-inner .shortcut-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px 24px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+            min-width: 140px;
+        }
+
+        .welcome-inner .shortcut-card:hover {
+            border-color: var(--accent);
+            box-shadow: 0 4px 20px var(--accent-glow);
+            transform: translateY(-2px);
+        }
+
+        .welcome-inner .shortcut-card .icon { font-size: 28px; margin-bottom: 6px; }
+        .welcome-inner .shortcut-card .name { font-size: 13px; font-weight: 500; }
+
+        /* ── Atom tooltip ────────────────────────── */
+        .atom-tooltip {
+            position: fixed;
+            background: var(--bg-panel);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px 14px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 300;
+            display: none;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        }
+
+        .atom-tooltip .el { font-size: 16px; font-weight: 600; }
+        .atom-tooltip .detail { color: var(--text-secondary); margin-top: 3px; }
+
+        /* ── Scrollbar ───────────────────────────── */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 2px; }
+    </style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+    <div class="header-title">
+        <span class="icon">🔮</span>
+        <div>
+            <h1>Crystal Mancer Viewer</h1>
+            <span id="structureLabel">No structure loaded</span>
+        </div>
+    </div>
+    <div class="header-actions">
+        <button class="btn" onclick="loadDemoCIF('SrTiO3')">🧪 SrTiO₃</button>
+        <button class="btn" onclick="loadDemoCIF('LaCoO3')">🧪 LaCoO₃</button>
+        <button class="btn" onclick="loadDemoCIF('BaTiO3')">🧪 BaTiO₃</button>
+        <label class="btn btn-primary" for="cifInput">
+            📂 Open CIF
+            <input type="file" id="cifInput" accept=".cif,.vasp,.xyz" style="display:none" onchange="handleFileOpen(event)">
+        </label>
+        <button class="btn" onclick="togglePanel()">⚙️</button>
+    </div>
+</div>
+
+<!-- 3D Viewport -->
+<div id="viewport"></div>
+
+<!-- Side Panel -->
+<div class="side-panel" id="sidePanel">
+    <div class="panel-section">
+        <h3>Structure Info</h3>
+        <div id="structureInfo">
+            <div class="info-row"><span class="label">Formula</span><span class="value" id="infoFormula">—</span></div>
+            <div class="info-row"><span class="label">Atoms</span><span class="value" id="infoAtoms">—</span></div>
+            <div class="info-row"><span class="label">Space Group</span><span class="value" id="infoSpacegroup">—</span></div>
+            <div class="info-row"><span class="label">a (Å)</span><span class="value" id="infoA">—</span></div>
+            <div class="info-row"><span class="label">b (Å)</span><span class="value" id="infoB">—</span></div>
+            <div class="info-row"><span class="label">c (Å)</span><span class="value" id="infoC">—</span></div>
+            <div class="info-row"><span class="label">α (°)</span><span class="value" id="infoAlpha">—</span></div>
+            <div class="info-row"><span class="label">β (°)</span><span class="value" id="infoBeta">—</span></div>
+            <div class="info-row"><span class="label">γ (°)</span><span class="value" id="infoGamma">—</span></div>
+            <div class="info-row"><span class="label">Volume (ų)</span><span class="value" id="infoVolume">—</span></div>
+        </div>
+    </div>
+
+    <div class="panel-section">
+        <h3>Elements</h3>
+        <div class="element-legend" id="elementLegend"></div>
+    </div>
+
+    <div class="panel-section">
+        <h3>Display</h3>
+        <div class="control-group">
+            <div class="control-row">
+                <label>Unit cell box</label>
+                <div class="toggle active" id="toggleUnitCell" onclick="toggleOption('unitCell')"></div>
+            </div>
+            <div class="control-row">
+                <label>Bonds</label>
+                <div class="toggle active" id="toggleBonds" onclick="toggleOption('bonds')"></div>
+            </div>
+            <div class="control-row">
+                <label>Axes</label>
+                <div class="toggle active" id="toggleAxes" onclick="toggleOption('axes')"></div>
+            </div>
+            <div class="control-row">
+                <label>Labels</label>
+                <div class="toggle" id="toggleLabels" onclick="toggleOption('labels')"></div>
+            </div>
+            <div class="control-row">
+                <label>Supercell (2×2×2)</label>
+                <div class="toggle" id="toggleSupercell" onclick="toggleOption('supercell')"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="panel-section">
+        <h3>Atom Scale</h3>
+        <input type="range" id="atomScale" min="0.2" max="2.0" step="0.1" value="0.6" oninput="updateAtomScale(this.value)">
+    </div>
+
+    <div class="panel-section">
+        <h3>Background</h3>
+        <div style="display:flex;gap:6px">
+            <button class="btn" onclick="setBgColor(0x0a0e1a)" style="width:100%">Dark</button>
+            <button class="btn" onclick="setBgColor(0x1e293b)" style="width:100%">Slate</button>
+            <button class="btn" onclick="setBgColor(0xffffff)" style="width:100%">White</button>
+        </div>
+    </div>
+</div>
+
+<!-- Welcome Screen -->
+<div class="welcome" id="welcomeScreen">
+    <div class="welcome-inner">
+        <h2>Crystal Structure Viewer</h2>
+        <p>Drag & drop a CIF file or load a demo structure</p>
+        <div class="shortcuts">
+            <div class="shortcut-card" onclick="loadDemoCIF('SrTiO3')">
+                <div class="icon">🔬</div>
+                <div class="name">SrTiO₃</div>
+            </div>
+            <div class="shortcut-card" onclick="loadDemoCIF('LaCoO3')">
+                <div class="icon">⚗️</div>
+                <div class="name">LaCoO₃</div>
+            </div>
+            <div class="shortcut-card" onclick="loadDemoCIF('BaTiO3')">
+                <div class="icon">🧬</div>
+                <div class="name">BaTiO₃</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Drop Zone -->
+<div class="drop-zone" id="dropZone">
+    <div class="drop-zone-inner">
+        <div class="icon">📥</div>
+        <p>Drop CIF file to load</p>
+    </div>
+</div>
+
+<!-- Atom Tooltip -->
+<div class="atom-tooltip" id="atomTooltip">
+    <div class="el" id="tooltipElement"></div>
+    <div class="detail" id="tooltipDetail"></div>
+</div>
+
+<!-- Three.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+//  CPK Element Colors & Radii
+// ═══════════════════════════════════════════════════════════════════
+const ELEMENT_DATA = {
+    H:  {color:0xffffff,radius:0.31,name:'Hydrogen'},
+    He: {color:0xd9ffff,radius:0.28,name:'Helium'},
+    Li: {color:0xcc80ff,radius:1.28,name:'Lithium'},
+    Be: {color:0xc2ff00,radius:0.96,name:'Beryllium'},
+    B:  {color:0xffb5b5,radius:0.84,name:'Boron'},
+    C:  {color:0x909090,radius:0.76,name:'Carbon'},
+    N:  {color:0x3050f8,radius:0.71,name:'Nitrogen'},
+    O:  {color:0xff0d0d,radius:0.66,name:'Oxygen'},
+    F:  {color:0x90e050,radius:0.57,name:'Fluorine'},
+    Na: {color:0xab5cf2,radius:1.66,name:'Sodium'},
+    Mg: {color:0x8aff00,radius:1.41,name:'Magnesium'},
+    Al: {color:0xbfa6a6,radius:1.21,name:'Aluminium'},
+    Si: {color:0xf0c8a0,radius:1.11,name:'Silicon'},
+    P:  {color:0xff8000,radius:1.07,name:'Phosphorus'},
+    S:  {color:0xffff30,radius:1.05,name:'Sulfur'},
+    Cl: {color:0x1ff01f,radius:1.02,name:'Chlorine'},
+    K:  {color:0x8f40d4,radius:2.03,name:'Potassium'},
+    Ca: {color:0x3dff00,radius:1.76,name:'Calcium'},
+    Sc: {color:0xe6e6e6,radius:1.70,name:'Scandium'},
+    Ti: {color:0xbfc2c7,radius:1.60,name:'Titanium'},
+    V:  {color:0xa6a6ab,radius:1.53,name:'Vanadium'},
+    Cr: {color:0x8a99c7,radius:1.39,name:'Chromium'},
+    Mn: {color:0x9c7ac7,radius:1.39,name:'Manganese'},
+    Fe: {color:0xe06633,radius:1.32,name:'Iron'},
+    Co: {color:0xf090a0,radius:1.26,name:'Cobalt'},
+    Ni: {color:0x50d050,radius:1.24,name:'Nickel'},
+    Cu: {color:0xc88033,radius:1.32,name:'Copper'},
+    Zn: {color:0x7d80b0,radius:1.22,name:'Zinc'},
+    Ga: {color:0xc28f8f,radius:1.22,name:'Gallium'},
+    Ge: {color:0x668f8f,radius:1.20,name:'Germanium'},
+    As: {color:0xbd80e3,radius:1.19,name:'Arsenic'},
+    Se: {color:0xffa100,radius:1.20,name:'Selenium'},
+    Br: {color:0xa62929,radius:1.20,name:'Bromine'},
+    Rb: {color:0x702eb0,radius:2.20,name:'Rubidium'},
+    Sr: {color:0x00ff00,radius:1.95,name:'Strontium'},
+    Y:  {color:0x94ffff,radius:1.90,name:'Yttrium'},
+    Zr: {color:0x94e0e0,radius:1.75,name:'Zirconium'},
+    Nb: {color:0x73c2c9,radius:1.64,name:'Niobium'},
+    Mo: {color:0x54b5b5,radius:1.54,name:'Molybdenum'},
+    Ru: {color:0x248f8f,radius:1.46,name:'Ruthenium'},
+    Rh: {color:0x0a7d8c,radius:1.42,name:'Rhodium'},
+    Pd: {color:0x006985,radius:1.39,name:'Palladium'},
+    Ag: {color:0xc0c0c0,radius:1.45,name:'Silver'},
+    Sn: {color:0x668080,radius:1.39,name:'Tin'},
+    Sb: {color:0x9e63b5,radius:1.39,name:'Antimony'},
+    Te: {color:0xd47a00,radius:1.38,name:'Tellurium'},
+    I:  {color:0x940094,radius:1.39,name:'Iodine'},
+    Cs: {color:0x57178f,radius:2.44,name:'Caesium'},
+    Ba: {color:0x00c900,radius:2.15,name:'Barium'},
+    La: {color:0x70d4ff,radius:2.07,name:'Lanthanum'},
+    Ce: {color:0xffffc7,radius:2.04,name:'Cerium'},
+    Pr: {color:0xd9ffc7,radius:2.03,name:'Praseodymium'},
+    Nd: {color:0xc7ffc7,radius:2.01,name:'Neodymium'},
+    Sm: {color:0x8fffc7,radius:1.98,name:'Samarium'},
+    Eu: {color:0x61ffc7,radius:1.98,name:'Europium'},
+    Gd: {color:0x45ffc7,radius:1.96,name:'Gadolinium'},
+    Dy: {color:0x1fffc7,radius:1.92,name:'Dysprosium'},
+    Ho: {color:0x00ff9c,radius:1.92,name:'Holmium'},
+    Er: {color:0x00e675,radius:1.89,name:'Erbium'},
+    Yb: {color:0x00bf38,radius:1.87,name:'Ytterbium'},
+    Lu: {color:0x00ab24,radius:1.87,name:'Lutetium'},
+    Hf: {color:0x4dc2ff,radius:1.75,name:'Hafnium'},
+    Ta: {color:0x4da6ff,radius:1.70,name:'Tantalum'},
+    W:  {color:0x2194d6,radius:1.62,name:'Tungsten'},
+    Re: {color:0x267dab,radius:1.51,name:'Rhenium'},
+    Ir: {color:0x175487,radius:1.41,name:'Iridium'},
+    Pt: {color:0xd0d0e0,radius:1.36,name:'Platinum'},
+    Au: {color:0xffd123,radius:1.36,name:'Gold'},
+    Pb: {color:0x575961,radius:1.46,name:'Lead'},
+    Bi: {color:0x9e4fb5,radius:1.48,name:'Bismuth'},
+};
+
+const DEFAULT_ELEMENT = {color: 0xff69b4, radius: 1.0, name: 'Unknown'};
+
+// ═══════════════════════════════════════════════════════════════════
+//  Demo CIF Data
+// ═══════════════════════════════════════════════════════════════════
+const DEMO_CIFS = {
+SrTiO3: `data_SrTiO3
+_cell_length_a 3.905
+_cell_length_b 3.905
+_cell_length_c 3.905
+_cell_angle_alpha 90
+_cell_angle_beta 90
+_cell_angle_gamma 90
+_symmetry_space_group_name_H-M 'Pm-3m'
+loop_
+_atom_site_label
+_atom_site_type_symbol
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+Sr1 Sr 0.0 0.0 0.0
+Ti1 Ti 0.5 0.5 0.5
+O1 O 0.5 0.5 0.0
+O2 O 0.5 0.0 0.5
+O3 O 0.0 0.5 0.5`,
+
+LaCoO3: `data_LaCoO3
+_cell_length_a 5.378
+_cell_length_b 5.378
+_cell_length_c 13.09
+_cell_angle_alpha 90
+_cell_angle_beta 90
+_cell_angle_gamma 120
+_symmetry_space_group_name_H-M 'R-3c'
+loop_
+_atom_site_label
+_atom_site_type_symbol
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+La1 La 0.0 0.0 0.25
+Co1 Co 0.0 0.0 0.0
+O1 O 0.5493 0.0 0.25
+O2 O 0.0 0.5493 0.25
+O3 O 0.4507 0.4507 0.25
+O4 O 0.5493 0.0 0.75
+O5 O 0.0 0.5493 0.75
+O6 O 0.4507 0.4507 0.75`,
+
+BaTiO3: `data_BaTiO3
+_cell_length_a 3.994
+_cell_length_b 3.994
+_cell_length_c 4.034
+_cell_angle_alpha 90
+_cell_angle_beta 90
+_cell_angle_gamma 90
+_symmetry_space_group_name_H-M 'P4mm'
+loop_
+_atom_site_label
+_atom_site_type_symbol
+_atom_site_fract_x
+_atom_site_fract_y
+_atom_site_fract_z
+Ba1 Ba 0.0 0.0 0.0
+Ti1 Ti 0.5 0.5 0.52
+O1 O 0.5 0.5 0.025
+O2 O 0.5 0.0 0.485
+O3 O 0.0 0.5 0.485`,
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  Three.js Scene Setup
+// ═══════════════════════════════════════════════════════════════════
+let scene, camera, renderer, controls;
+let atomMeshes = [], bondMeshes = [], labelSprites = [];
+let unitCellLines, axesGroup;
+let crystalGroup;
+let currentStructure = null;
+
+const options = {
+    unitCell: true, bonds: true, axes: true,
+    labels: false, supercell: false, atomScale: 0.6,
+};
+
+function initScene() {
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0a0e1a);
+
+    // Subtle fog for depth
+    scene.fog = new THREE.FogExp2(0x0a0e1a, 0.015);
+
+    camera = new THREE.PerspectiveCamera(45, 1, 0.1, 500);
+    camera.position.set(12, 10, 14);
+
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
+    document.getElementById('viewport').appendChild(renderer.domElement);
+
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.rotateSpeed = 0.6;
+    controls.zoomSpeed = 1.2;
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 0.5;
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0x404060, 0.6);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    dirLight.position.set(10, 15, 10);
+    dirLight.castShadow = true;
+    scene.add(dirLight);
+
+    const fillLight = new THREE.DirectionalLight(0x6366f1, 0.3);
+    fillLight.position.set(-5, 3, -5);
+    scene.add(fillLight);
+
+    const rimLight = new THREE.DirectionalLight(0xc084fc, 0.2);
+    rimLight.position.set(0, -5, 10);
+    scene.add(rimLight);
+
+    crystalGroup = new THREE.Group();
+    scene.add(crystalGroup);
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    animate();
+}
+
+function handleResize() {
+    const vp = document.getElementById('viewport');
+    const w = vp.clientWidth;
+    const h = vp.clientHeight;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h);
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  CIF Parser
+// ═══════════════════════════════════════════════════════════════════
+function parseCIF(text) {
+    const lines = text.split('\n').map(l => l.trim());
+    const structure = {
+        a: 5, b: 5, c: 5,
+        alpha: 90, beta: 90, gamma: 90,
+        spacegroup: '',
+        atoms: [],
+    };
+
+    // Parse cell parameters
+    for (const line of lines) {
+        if (line.startsWith('_cell_length_a')) structure.a = parseFloat(line.split(/\s+/)[1]);
+        if (line.startsWith('_cell_length_b')) structure.b = parseFloat(line.split(/\s+/)[1]);
+        if (line.startsWith('_cell_length_c')) structure.c = parseFloat(line.split(/\s+/)[1]);
+        if (line.startsWith('_cell_angle_alpha')) structure.alpha = parseFloat(line.split(/\s+/)[1]);
+        if (line.startsWith('_cell_angle_beta')) structure.beta = parseFloat(line.split(/\s+/)[1]);
+        if (line.startsWith('_cell_angle_gamma')) structure.gamma = parseFloat(line.split(/\s+/)[1]);
+        if (line.startsWith('_symmetry_space_group_name')) {
+            structure.spacegroup = line.split(/['"]/)[1] || line.split(/\s+/).slice(1).join(' ');
+        }
+    }
+
+    // Find atom loop
+    let inLoop = false;
+    let loopHeaders = [];
+    let atomDataStart = false;
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+
+        if (line === 'loop_') {
+            inLoop = true;
+            loopHeaders = [];
+            continue;
+        }
+
+        if (inLoop && line.startsWith('_atom_site_')) {
+            loopHeaders.push(line);
+            continue;
+        }
+
+        if (inLoop && loopHeaders.length > 0 && !line.startsWith('_')) {
+            if (line === '' || line.startsWith('loop_') || line.startsWith('#')) {
+                inLoop = false;
+                continue;
+            }
+
+            // Check if this loop has atom site data
+            const hasSymbol = loopHeaders.includes('_atom_site_type_symbol');
+            const hasFractX = loopHeaders.includes('_atom_site_fract_x');
+
+            if (hasSymbol && hasFractX) {
+                const parts = line.split(/\s+/);
+                if (parts.length >= loopHeaders.length) {
+                    const symbolIdx = loopHeaders.indexOf('_atom_site_type_symbol');
+                    const xIdx = loopHeaders.indexOf('_atom_site_fract_x');
+                    const yIdx = loopHeaders.indexOf('_atom_site_fract_y');
+                    const zIdx = loopHeaders.indexOf('_atom_site_fract_z');
+
+                    const element = parts[symbolIdx].replace(/[0-9+-]/g, '');
+                    structure.atoms.push({
+                        element,
+                        x: parseFloat(parts[xIdx]),
+                        y: parseFloat(parts[yIdx]),
+                        z: parseFloat(parts[zIdx]),
+                    });
+                }
+            }
+        }
+    }
+
+    // Compute lattice matrix
+    const { a, b, c, alpha, beta, gamma } = structure;
+    const ar = alpha * Math.PI / 180;
+    const br = beta * Math.PI / 180;
+    const gr = gamma * Math.PI / 180;
+
+    const cosA = Math.cos(ar), cosB = Math.cos(br), cosG = Math.cos(gr);
+    const sinG = Math.sin(gr);
+
+    structure.lattice = [
+        [a, 0, 0],
+        [b * cosG, b * sinG, 0],
+        [c * cosB,
+         c * (cosA - cosB * cosG) / sinG,
+         c * Math.sqrt(1 - cosA*cosA - cosB*cosB - cosG*cosG + 2*cosA*cosB*cosG) / sinG]
+    ];
+
+    structure.volume = Math.abs(
+        structure.lattice[0][0] * (structure.lattice[1][1] * structure.lattice[2][2] - structure.lattice[1][2] * structure.lattice[2][1]) -
+        structure.lattice[0][1] * (structure.lattice[1][0] * structure.lattice[2][2] - structure.lattice[1][2] * structure.lattice[2][0]) +
+        structure.lattice[0][2] * (structure.lattice[1][0] * structure.lattice[2][1] - structure.lattice[1][1] * structure.lattice[2][0])
+    );
+
+    return structure;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  Structure Rendering
+// ═══════════════════════════════════════════════════════════════════
+function fracToCart(fx, fy, fz, lattice) {
+    return new THREE.Vector3(
+        fx * lattice[0][0] + fy * lattice[1][0] + fz * lattice[2][0],
+        fx * lattice[0][1] + fy * lattice[1][1] + fz * lattice[2][1],
+        fx * lattice[0][2] + fy * lattice[1][2] + fz * lattice[2][2]
+    );
+}
+
+function clearCrystal() {
+    while (crystalGroup.children.length > 0) {
+        const obj = crystalGroup.children[0];
+        crystalGroup.remove(obj);
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) {
+            if (obj.material.map) obj.material.map.dispose();
+            obj.material.dispose();
+        }
+    }
+    atomMeshes = [];
+    bondMeshes = [];
+    labelSprites = [];
+}
+
+function renderStructure(structure) {
+    clearCrystal();
+    currentStructure = structure;
+
+    const L = structure.lattice;
+
+    // Determine atoms to render (supercell or single cell)
+    const repeats = options.supercell ? [0, 1] : [0];
+    const atomsToRender = [];
+
+    for (const dx of repeats) {
+        for (const dy of repeats) {
+            for (const dz of repeats) {
+                for (const atom of structure.atoms) {
+                    atomsToRender.push({
+                        element: atom.element,
+                        x: atom.x + dx,
+                        y: atom.y + dy,
+                        z: atom.z + dz,
+                    });
+                }
+            }
+        }
+    }
+
+    // ── Atoms ────────────────────────────────────────────
+    const atomGeomCache = {};
+    const atomMatCache = {};
+
+    for (const atom of atomsToRender) {
+        const elData = ELEMENT_DATA[atom.element] || DEFAULT_ELEMENT;
+        const r = elData.radius * 0.25 * options.atomScale;
+
+        if (!atomGeomCache[r]) {
+            atomGeomCache[r] = new THREE.SphereGeometry(r, 32, 24);
+        }
+
+        if (!atomMatCache[atom.element]) {
+            atomMatCache[atom.element] = new THREE.MeshPhysicalMaterial({
+                color: elData.color,
+                metalness: 0.1,
+                roughness: 0.3,
+                clearcoat: 0.5,
+                clearcoatRoughness: 0.2,
+                envMapIntensity: 1.0,
+            });
+        }
+
+        const pos = fracToCart(atom.x, atom.y, atom.z, L);
+        const mesh = new THREE.Mesh(atomGeomCache[r], atomMatCache[atom.element]);
+        mesh.position.copy(pos);
+        mesh.userData = { element: atom.element, frac: [atom.x, atom.y, atom.z] };
+        crystalGroup.add(mesh);
+        atomMeshes.push(mesh);
+    }
+
+    // ── Bonds ────────────────────────────────────────────
+    const bondCutoff = 2.8; // Å
+    const bondMat = new THREE.MeshPhysicalMaterial({
+        color: 0x64748b,
+        metalness: 0.0,
+        roughness: 0.6,
+        transparent: true,
+        opacity: 0.5,
+    });
+
+    for (let i = 0; i < atomMeshes.length; i++) {
+        for (let j = i + 1; j < atomMeshes.length; j++) {
+            const d = atomMeshes[i].position.distanceTo(atomMeshes[j].position);
+            if (d > 0.5 && d < bondCutoff) {
+                const dir = new THREE.Vector3().subVectors(atomMeshes[j].position, atomMeshes[i].position);
+                const mid = new THREE.Vector3().addVectors(atomMeshes[i].position, atomMeshes[j].position).multiplyScalar(0.5);
+                const bondGeom = new THREE.CylinderGeometry(0.04, 0.04, d, 8);
+                const bond = new THREE.Mesh(bondGeom, bondMat);
+                bond.position.copy(mid);
+                bond.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+                crystalGroup.add(bond);
+                bondMeshes.push(bond);
+            }
+        }
+    }
+
+    // ── Unit Cell Box ────────────────────────────────────
+    const cellVerts = [
+        [0,0,0],[1,0,0],[1,1,0],[0,1,0],
+        [0,0,1],[1,0,1],[1,1,1],[0,1,1]
+    ].map(([x,y,z]) => fracToCart(x, y, z, L));
+
+    const cellEdges = [
+        [0,1],[1,2],[2,3],[3,0],
+        [4,5],[5,6],[6,7],[7,4],
+        [0,4],[1,5],[2,6],[3,7],
+    ];
+
+    const cellGeom = new THREE.BufferGeometry();
+    const cellPositions = [];
+    for (const [a, b] of cellEdges) {
+        cellPositions.push(cellVerts[a].x, cellVerts[a].y, cellVerts[a].z);
+        cellPositions.push(cellVerts[b].x, cellVerts[b].y, cellVerts[b].z);
+    }
+    cellGeom.setAttribute('position', new THREE.Float32BufferAttribute(cellPositions, 3));
+    unitCellLines = new THREE.LineSegments(cellGeom, new THREE.LineBasicMaterial({
+        color: 0x6366f1, transparent: true, opacity: 0.6
+    }));
+    crystalGroup.add(unitCellLines);
+
+    // ── Axes ─────────────────────────────────────────────
+    axesGroup = new THREE.Group();
+    const axisLen = Math.max(structure.a, structure.b, structure.c) * 0.4;
+    const axisColors = [0xff4444, 0x44ff44, 0x4444ff];
+    const axisLabels = ['a', 'b', 'c'];
+    const axisVecs = [
+        new THREE.Vector3(L[0][0], L[0][1], L[0][2]).normalize(),
+        new THREE.Vector3(L[1][0], L[1][1], L[1][2]).normalize(),
+        new THREE.Vector3(L[2][0], L[2][1], L[2][2]).normalize(),
+    ];
+
+    for (let i = 0; i < 3; i++) {
+        const arrowGeom = new THREE.CylinderGeometry(0.03, 0.03, axisLen, 8);
+        const arrowMat = new THREE.MeshBasicMaterial({ color: axisColors[i] });
+        const arrow = new THREE.Mesh(arrowGeom, arrowMat);
+        const dir = axisVecs[i].clone().multiplyScalar(axisLen / 2);
+        arrow.position.copy(dir);
+        arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), axisVecs[i]);
+        axesGroup.add(arrow);
+    }
+    crystalGroup.add(axesGroup);
+
+    // ── Center the structure ─────────────────────────────
+    const center = fracToCart(0.5, 0.5, 0.5, L);
+    if (options.supercell) {
+        center.copy(fracToCart(1, 1, 1, L));
+    }
+    crystalGroup.position.sub(center);
+
+    // ── Camera framing ───────────────────────────────────
+    const maxDim = Math.max(structure.a, structure.b, structure.c);
+    const dist = maxDim * (options.supercell ? 3.5 : 2.5);
+    camera.position.set(dist * 0.8, dist * 0.6, dist);
+    controls.target.set(0, 0, 0);
+    controls.update();
+
+    // ── Apply visibility options ─────────────────────────
+    applyOptions();
+    updateInfoPanel(structure);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  UI Functions
+// ═══════════════════════════════════════════════════════════════════
+function applyOptions() {
+    if (unitCellLines) unitCellLines.visible = options.unitCell;
+    bondMeshes.forEach(b => b.visible = options.bonds);
+    if (axesGroup) axesGroup.visible = options.axes;
+}
+
+function toggleOption(key) {
+    options[key] = !options[key];
+    const toggle = document.getElementById('toggle' + key.charAt(0).toUpperCase() + key.slice(1));
+    toggle.classList.toggle('active', options[key]);
+
+    if (key === 'supercell' && currentStructure) {
+        renderStructure(currentStructure);
+    } else {
+        applyOptions();
+    }
+}
+
+function updateAtomScale(val) {
+    options.atomScale = parseFloat(val);
+    if (currentStructure) renderStructure(currentStructure);
+}
+
+function setBgColor(color) {
+    scene.background = new THREE.Color(color);
+    if (scene.fog) scene.fog.color = new THREE.Color(color);
+}
+
+function togglePanel() {
+    document.getElementById('sidePanel').classList.toggle('collapsed');
+    setTimeout(handleResize, 350);
+}
+
+function updateInfoPanel(structure) {
+    const elements = {};
+    structure.atoms.forEach(a => {
+        elements[a.element] = (elements[a.element] || 0) + 1;
+    });
+    const formula = Object.entries(elements).map(([el, n]) => el + (n > 1 ? n : '')).join('');
+
+    document.getElementById('structureLabel').textContent = formula;
+    document.getElementById('infoFormula').textContent = formula;
+    document.getElementById('infoAtoms').textContent = structure.atoms.length;
+    document.getElementById('infoSpacegroup').textContent = structure.spacegroup || '—';
+    document.getElementById('infoA').textContent = structure.a.toFixed(3);
+    document.getElementById('infoB').textContent = structure.b.toFixed(3);
+    document.getElementById('infoC').textContent = structure.c.toFixed(3);
+    document.getElementById('infoAlpha').textContent = structure.alpha.toFixed(1);
+    document.getElementById('infoBeta').textContent = structure.beta.toFixed(1);
+    document.getElementById('infoGamma').textContent = structure.gamma.toFixed(1);
+    document.getElementById('infoVolume').textContent = structure.volume.toFixed(2);
+
+    // Element legend
+    const legend = document.getElementById('elementLegend');
+    legend.innerHTML = '';
+    for (const [el, count] of Object.entries(elements)) {
+        const elData = ELEMENT_DATA[el] || DEFAULT_ELEMENT;
+        const chip = document.createElement('div');
+        chip.className = 'element-chip';
+        chip.innerHTML = `<div class="dot" style="background:#${elData.color.toString(16).padStart(6,'0')}"></div>${el} (${count})`;
+        legend.appendChild(chip);
+    }
+
+    document.getElementById('welcomeScreen').style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  File Handling
+// ═══════════════════════════════════════════════════════════════════
+function loadDemoCIF(name) {
+    const text = DEMO_CIFS[name];
+    if (text) {
+        const structure = parseCIF(text);
+        renderStructure(structure);
+    }
+}
+
+function handleFileOpen(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const structure = parseCIF(e.target.result);
+        renderStructure(structure);
+    };
+    reader.readAsText(file);
+}
+
+// Drag & drop
+document.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    document.getElementById('dropZone').classList.add('active');
+});
+
+document.addEventListener('dragleave', (e) => {
+    if (e.relatedTarget === null) {
+        document.getElementById('dropZone').classList.remove('active');
+    }
+});
+
+document.addEventListener('drop', (e) => {
+    e.preventDefault();
+    document.getElementById('dropZone').classList.remove('active');
+    const file = e.dataTransfer.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const structure = parseCIF(ev.target.result);
+            renderStructure(structure);
+        };
+        reader.readAsText(file);
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+//  Atom Hover Tooltip
+// ═══════════════════════════════════════════════════════════════════
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+document.addEventListener('mousemove', (e) => {
+    const vp = document.getElementById('viewport');
+    const rect = vp.getBoundingClientRect();
+    mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+    raycaster.setFromCamera(mouse, camera);
+    const hits = raycaster.intersectObjects(atomMeshes);
+    const tooltip = document.getElementById('atomTooltip');
+
+    if (hits.length > 0) {
+        const hit = hits[0];
+        const data = hit.object.userData;
+        const elData = ELEMENT_DATA[data.element] || DEFAULT_ELEMENT;
+
+        document.getElementById('tooltipElement').textContent = `${data.element} — ${elData.name}`;
+        document.getElementById('tooltipDetail').textContent =
+            `(${data.frac[0].toFixed(3)}, ${data.frac[1].toFixed(3)}, ${data.frac[2].toFixed(3)})`;
+
+        tooltip.style.display = 'block';
+        tooltip.style.left = (e.clientX + 15) + 'px';
+        tooltip.style.top = (e.clientY - 10) + 'px';
+    } else {
+        tooltip.style.display = 'none';
+    }
+});
+
+// Stop auto-rotate on interaction
+document.addEventListener('mousedown', () => { controls.autoRotate = false; });
+
+// ═══════════════════════════════════════════════════════════════════
+//  Initialize
+// ═══════════════════════════════════════════════════════════════════
+initScene();
+</script>
+</body>
+</html>

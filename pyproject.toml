@@ -1,0 +1,30 @@
+[project]
+name = "crystalmancer"
+version = "0.1.0"
+description = "AI-driven catalyst discovery via diffusion-guided GNN + literature intelligence"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Ron"}
+]
+dependencies = [
+    "pymatgen>=2024.1.1",
+    "requests>=2.31.0",
+    "tqdm>=4.66.0",
+    "pandas>=2.1.0",
+    "numpy>=1.24.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-mock>=3.12.0",
+]
+
+[project.scripts]
+crystalmancer = "crystalmancer.cli:main"
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
