@@ -37,54 +37,51 @@ logging.basicConfig(
 )
 logger = logging.getLogger("download_all")
 
-# ── Google Drive setup ──────────────────────────────────────────────
-GDRIVE_CANDIDATES = [
-    Path("/Users/roshan/Google Drive/Other computers/My PC - 1/Desktop/Code/CrystalMancerData"),
-]
-
-def find_or_create_gdrive_dir() -> Path | None:
-    """Attempt to find Google Drive mount and create data dir."""
-    for candidate in GDRIVE_CANDIDATES:
-        try:
-            candidate.mkdir(parents=True, exist_ok=True)
-            logger.info("Using Google Drive: %s", candidate)
-            return candidate
-        except Exception as e:
-            logger.warning("Could not create %s: %s", candidate, e)
-
-    logger.info("Google Drive not found. Using local storage.")
-    return None
-
-
+# ── Google Drive setup (auto-detects environment) ───────────────────
 def setup_storage() -> Path:
-    """Set up data storage, preferring Google Drive for heavy files."""
+    """Set up data storage — writes DIRECTLY to Google Drive.
+
+    Environment detection:
+      1. Google Colab  → /content/drive/MyDrive/CrystalMancerData
+      2. macOS local   → ~/Library/CloudStorage/GoogleDrive-*/My Drive/CrystalMancerData
+      3. Fallback      → project_root/data/output  (local only)
+
+    No symlinks, no patching needed.
+    """
+    # ── 1. Google Colab ──────────────────────────────────────────────
+    colab_path = Path("/content/drive/MyDrive/CrystalMancerData")
+    if colab_path.parent.exists():          # /content/drive/MyDrive exists
+        colab_path.mkdir(parents=True, exist_ok=True)
+        logger.info("🟢 Colab detected — writing to: %s", colab_path)
+        _ensure_subdirs(colab_path)
+        return colab_path
+
+    # ── 2. macOS with Google Drive app ───────────────────────────────
+    cloud_storage = Path.home() / "Library" / "CloudStorage"
+    if cloud_storage.exists():
+        for gdir in sorted(cloud_storage.iterdir()):
+            if gdir.name.startswith("GoogleDrive"):
+                my_drive = gdir / "My Drive" / "CrystalMancerData"
+                try:
+                    my_drive.mkdir(parents=True, exist_ok=True)
+                    logger.info("🟢 macOS Google Drive detected — writing to: %s", my_drive)
+                    _ensure_subdirs(my_drive)
+                    return my_drive
+                except Exception as e:
+                    logger.warning("Could not use %s: %s", my_drive, e)
+
+    # ── 3. Fallback: local project directory ─────────────────────────
     output_dir = DEFAULT_OUTPUT_DIR
-
-    gdrive = find_or_create_gdrive_dir()
-    if gdrive:
-        # Ensure the local output directory exists before symlinking inside it
-        output_dir.mkdir(parents=True, exist_ok=True)
-        
-        # Symlink heavy data dirs to Google Drive
-        for subdir in ["materials_project", "gnome", "cifs", "literature"]:
-            gdrive_sub = gdrive / subdir
-            gdrive_sub.mkdir(parents=True, exist_ok=True)
-            local_sub = output_dir / subdir
-            if local_sub.exists() and not local_sub.is_symlink():
-                # Move existing data to gdrive
-                import shutil
-                for f in local_sub.iterdir():
-                    dest = gdrive_sub / f.name
-                    if not dest.exists():
-                        shutil.move(str(f), str(dest))
-                local_sub.rmdir()
-            if not local_sub.exists():
-                local_sub.symlink_to(gdrive_sub)
-                logger.info("  Symlinked %s → %s", local_sub.name, gdrive_sub)
-    else:
-        output_dir.mkdir(parents=True, exist_ok=True)
-
+    output_dir.mkdir(parents=True, exist_ok=True)
+    logger.info("⚠️  No Google Drive found — writing locally to: %s", output_dir)
+    _ensure_subdirs(output_dir)
     return output_dir
+
+
+def _ensure_subdirs(base: Path) -> None:
+    """Create standard data subdirectories."""
+    for subdir in ["materials_project", "gnome", "cifs", "literature"]:
+        (base / subdir).mkdir(parents=True, exist_ok=True)
 
 
 # ── Materials Project: ALL oxides ────────────────────────────────
@@ -332,7 +329,7 @@ def main():
     logger.info("═" * 60)
     try:
         from scripts.mine_literature import main as mine_main
-        mine_main()
+        mine_main(output_override=output_dir / "literature")
     except Exception as e:
         logger.error("Literature mining encountered an error: %s", e)
 

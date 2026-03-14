@@ -329,12 +329,12 @@ def extract_catalytic_data_regex(paper: PaperRecord) -> PaperRecord:
 
 
 # ── Main pipeline ────────────────────────────────────────────────
-def main():
+def main(output_override: Path | None = None):
     logger.info("╔" + "═" * 58 + "╗")
     logger.info("║  Crystal Mancer — Literature Mining Pipeline             ║")
     logger.info("╚" + "═" * 58 + "╝")
 
-    output_dir = DEFAULT_OUTPUT_DIR / "literature"
+    output_dir = output_override or (DEFAULT_OUTPUT_DIR / "literature")
     output_dir.mkdir(parents=True, exist_ok=True)
     output_file = output_dir / "catalysis_papers.jsonl"
 
