@@ -571,9 +571,20 @@ def main(output_override: Path | None = None, quick: bool = False,
 
     # Select queries
     queries = QUICK_QUERIES if quick else CATALYSIS_QUERIES
-    s2_limit = 10 if quick else 200
-    cr_limit = 10 if quick else 100
-    pmc_limit = 10 if quick else 100
+    has_s2_key = bool(os.environ.get("S2_API_KEY", ""))
+
+    # Adjust limits based on available APIs
+    if has_s2_key:
+        s2_limit = 10 if quick else 200
+        cr_limit = 10 if quick else 100
+        pmc_limit = 10 if quick else 100
+        logger.info("📚 Sources: Semantic Scholar (key) + CrossRef + Europe PMC")
+    else:
+        s2_limit = 0  # Skip S2 entirely — rate limits are brutal without key
+        cr_limit = 10 if quick else 200  # Double CrossRef to compensate
+        pmc_limit = 10 if quick else 200  # Double PMC to compensate
+        logger.info("📚 Sources: CrossRef + Europe PMC (no S2 key — skipping S2)")
+        logger.info("💡 Get a free S2 key at: https://www.semanticscholar.org/product/api#api-key")
 
     # Progress tracking
     total_new = 0
@@ -584,8 +595,8 @@ def main(output_override: Path | None = None, quick: bool = False,
         logger.info("─" * 60)
         logger.info("Query %d/%d: %s", i + 1, len(queries), query)
 
-        # Search all APIs
-        s2_papers = search_semantic_scholar(query, limit=s2_limit)
+        # Search available APIs
+        s2_papers = search_semantic_scholar(query, limit=s2_limit) if s2_limit > 0 else []
         cr_papers = search_crossref(query, limit=cr_limit)
         pmc_papers = search_europe_pmc(query, limit=pmc_limit)
 
