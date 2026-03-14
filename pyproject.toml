@@ -25,6 +25,9 @@ dev = [
 [project.scripts]
 crystalmancer = "crystalmancer.cli:main"
 
+[tool.setuptools.packages.find]
+include = ["crystalmancer*"]
+
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
