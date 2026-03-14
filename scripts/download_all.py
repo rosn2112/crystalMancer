@@ -1,18 +1,19 @@
 #!/usr/bin/env python
 """
-Crystal Mancer — Overnight Bulk Data Download Script
+Crystal Mancer — Scaled-Up Bulk Data Download + Mining
 =====================================================
 
-Run this overnight to collect the full training dataset:
-  conda run -n aienv python scripts/download_all.py
+Run this on Colab to collect the full training dataset:
+  python scripts/download_all.py
 
 Downloads:
-  1. Materials Project: ALL oxides with DFT data (~49K structures)
-  2. GNoME: ~79K stable oxide structures + CIFs for top 10K
-  3. COD: Perovskite-targeted CIFs
-  4. Enriches with Sci-Hub DOI matching
+  1. Materials Project: ALL oxide structures (~150K+)
+  2. GNoME: 79K stable structures + CIFs for top 50K
+  3. Literature mining: 31 queries × 200+ papers (regex + LLM)
+  4. Enrichment: links papers to structures by composition
+  5. Deduplication: canonical formula, keeps best polymorph
 
-Heavy data goes to Google Drive (symlinked) if available.
+Data goes DIRECTLY to Google Drive.
 """
 
 from __future__ import annotations
@@ -88,9 +89,9 @@ def _ensure_subdirs(base: Path) -> None:
 def download_all_mp_oxides(output_dir: Path, api_key: str) -> int:
     """Download ALL oxide structures from Materials Project.
 
-    Strategy: query for all compounds containing O, with 2-5 elements,
-    that are near the convex hull (stable). This gives ~49K structures.
-    Each comes with DFT-computed formation energy, band gap, etc.
+    Scaled-up strategy: query for ALL compounds containing O,
+    no element-count cap, relaxed stability filter (< 0.25 eV/atom).
+    This returns ~150K+ structures with DFT-computed properties.
     """
     try:
         from mp_api.client import MPRester
@@ -124,14 +125,13 @@ def download_all_mp_oxides(output_dir: Path, api_key: str) -> int:
 
     with MPRester(api_key) as mpr:
         # Query ALL oxides in one shot — MP handles pagination internally
-        logger.info("Querying MP for all stable oxides (energy_above_hull < 0.1 eV/atom) …")
-        logger.info("This query returns ~49K structures. Be patient.")
+        logger.info("Querying MP for ALL oxides (energy_above_hull < 0.25 eV/atom) …")
+        logger.info("This returns ~150K+ structures. Be very patient.")
 
         try:
             docs = mpr.materials.summary.search(
                 elements=["O"],
-                num_elements=(2, 6),
-                energy_above_hull=(None, 0.1),
+                energy_above_hull=(None, 0.25),
                 fields=[
                     "material_id", "formula_pretty", "structure", "symmetry",
                     "formation_energy_per_atom", "energy_above_hull",
@@ -317,19 +317,21 @@ def main():
 
     t0 = time.time()
 
-    # Step 1: Materials Project — ALL oxides
+    # Step 1: Materials Project — ALL oxides (150K+)
     n_mp = download_all_mp_oxides(output_dir, api_key)
 
-    # Step 2: GNoME — Top 10K stable oxide CIFs
-    n_gnome = download_gnome_data(output_dir, max_cifs=10000)
+    # Step 2: GNoME — Top 50K stable oxide CIFs
+    n_gnome = download_gnome_data(output_dir, max_cifs=50000)
 
-    # Step 3: Extract paper metadata (with DOIs!)
+    # Step 3: Literature mining (full mode, LLM if key available)
     logger.info("═" * 60)
     logger.info("  MINING LITERATURE FOR EXPERIMENTAL DATA")
     logger.info("═" * 60)
+    use_llm = bool(os.environ.get("OPENROUTER_API_KEY", ""))
     try:
         from scripts.mine_literature import main as mine_main
-        mine_main(output_override=output_dir / "literature")
+        mine_main(output_override=output_dir / "literature",
+                  quick=False, use_llm=use_llm)
     except Exception as e:
         logger.error("Literature mining encountered an error: %s", e)
 
