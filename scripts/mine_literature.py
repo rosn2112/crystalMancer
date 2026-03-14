@@ -49,6 +49,13 @@ SEMANTIC_SCHOLAR_API = "https://api.semanticscholar.org/graph/v1"
 CROSSREF_API = "https://api.crossref.org/works"
 EUROPE_PMC_API = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
 
+def _s2_headers() -> dict | None:
+    """Return S2 headers with API key if available."""
+    key = os.environ.get("S2_API_KEY", "")
+    if key:
+        return {"x-api-key": key}
+    return None
+
 # ── Catalysis search queries ─────────────────────────────────────
 CATALYSIS_QUERIES = [
     # OER/HER — electrocatalysis
@@ -162,33 +169,43 @@ def robust_get(url: str, params: dict, headers: dict | None = None,
     """Perform a GET request with exponential backoff for rate limits."""
     for attempt in range(max_retries):
         try:
-            resp = requests.get(url, params=params, headers=headers, timeout=20)
+            resp = requests.get(url, params=params, headers=headers, timeout=30)
             if resp.status_code in [429, 502, 503, 504]:
-                wait_time = (2 ** attempt) * 10 + random.randint(1, 10)
+                wait_time = (2 ** attempt) * 15 + random.randint(5, 30)
                 logger.warning("HTTP %d for %s... waiting %ds (Attempt %d/%d)",
-                               resp.status_code, url[:30], wait_time, attempt+1, max_retries)
+                               resp.status_code, url[:45], wait_time, attempt+1, max_retries)
                 time.sleep(wait_time)
                 continue
             resp.raise_for_status()
             return resp
         except requests.exceptions.RequestException as e:
-            wait_time = (2 ** attempt) * 5 + random.randint(1, 5)
+            wait_time = (2 ** attempt) * 10 + random.randint(1, 10)
             logger.warning("Request exception for %s...: %s, waiting %ds (Attempt %d/%d)",
-                           url[:30], e, wait_time, attempt+1, max_retries)
+                           url[:45], e, wait_time, attempt+1, max_retries)
             time.sleep(wait_time)
 
-    logger.error("Max retries reached for %s", url[:50])
+    logger.error("Max retries reached for %s", url[:60])
+    if "semanticscholar" in url:
+        logger.error("💡 Get a free S2 API key for higher limits: "
+                     "https://www.semanticscholar.org/product/api#api-key "
+                     "Set S2_API_KEY env var.")
     return None
 
 
 # ── Semantic Scholar search ──────────────────────────────────────
 def search_semantic_scholar(query: str, limit: int = 100) -> list[PaperRecord]:
-    """Search Semantic Scholar for catalysis papers."""
+    """Search Semantic Scholar for catalysis papers.
+
+    Set S2_API_KEY env var for higher rate limits (100 req/sec vs 1 req/sec).
+    Get a free key at: https://www.semanticscholar.org/product/api#api-key
+    """
     papers = []
     offset = 0
+    s2_headers = _s2_headers()
+    batch_size = 100 if s2_headers else 50  # Smaller batches without API key
 
     while offset < limit:
-        batch = min(100, limit - offset)
+        batch = min(batch_size, limit - offset)
         try:
             resp = robust_get(
                 f"{SEMANTIC_SCHOLAR_API}/paper/search",
@@ -197,7 +214,8 @@ def search_semantic_scholar(query: str, limit: int = 100) -> list[PaperRecord]:
                     "limit": batch,
                     "offset": offset,
                     "fields": "title,abstract,year,authors,externalIds,journal",
-                }
+                },
+                headers=s2_headers,
             )
             if not resp:
                 break
@@ -223,7 +241,8 @@ def search_semantic_scholar(query: str, limit: int = 100) -> list[PaperRecord]:
             if offset >= total:
                 break
 
-            time.sleep(2)  # Base rate limit
+            # Rate limit: 1 req/sec without key, ~10 req/sec with key
+            time.sleep(1 if s2_headers else 4)
 
         except Exception as exc:
             logger.warning("S2 search failed for '%s': %s", query[:40], exc)
