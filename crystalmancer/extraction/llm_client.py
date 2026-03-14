@@ -21,21 +21,10 @@ logger = logging.getLogger(__name__)
 
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-# Free models — ordered by quality (strongest first, then fallbacks)
-# Update this list periodically; free models rotate on OpenRouter.
-# Check https://openrouter.ai/models?q=free for current availability.
+# User-restricted models — only use these two
 FREE_MODELS: list[str] = [
-    # ── Tier 1: Strongest reasoning ──
-    "qwen/qwen3-235b-a22b:free",                          # Qwen3 235B MoE
-    "meta-llama/llama-4-maverick:free",                   # Llama 4 Maverick
-    # ── Tier 2: Strong instruction-following ──
-    "google/gemma-3-27b-it:free",                         # Gemma 3 27B
-    "mistralai/mistral-small-3.1-24b-instruct:free",      # Mistral Small 3.1
-    "qwen/qwen3-32b:free",                                # Qwen3 32B
-    # ── Tier 3: Fast fallbacks ──
-    "google/gemma-3-12b-it:free",                         # Gemma 3 12B
-    "meta-llama/llama-4-scout:free",                      # Llama 4 Scout
-    "deepseek/deepseek-chat-v3-0324:free",                # DeepSeek V3
+    "openrouter/hunter-alpha",
+    "nvidia/nemotron-3-super-120b-a12b:free",
 ]
 
 
